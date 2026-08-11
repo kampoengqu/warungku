@@ -22,6 +22,7 @@
 </head>
 <body class="bg-gray-100 text-gray-800 relative min-h-screen">
 
+ <!-- Loader (Akan langsung ditutup jika data sudah ada di Cache) -->
  <div id="initial-loader" class="fixed inset-0 bg-white/95 z-[100] flex flex-col items-center justify-center transition-opacity duration-300">
     <div class="animate-spin rounded-full h-14 w-14 border-4 border-gray-200 border-t-blue-600 mb-4"></div>
     <h2 class="text-xl font-bold text-gray-800 mb-1">Mempersiapkan Kasir</h2>
@@ -207,37 +208,38 @@
         }
     }
 
-    // --- INITIAL DATA FETCH (PRE-FETCHING & CACHE) ---
+    // --- INITIAL DATA FETCH (PRE-FETCHING & CACHE LOKAL SATSET) ---
     async function initApp() {
         if (API_URL.includes("ISI_DENGAN_URL")) {
             document.getElementById('initial-loader').innerHTML = '<h2 class="text-red-500 font-bold text-xl mb-2">Error Setup</h2><p class="text-gray-600">Anda belum memasukkan URL API di script index.html.</p>';
             return;
         }
 
-        // Cek penyimpanan memori lokal (Cache)
+        // 1. Cek apakah di memori HP (Cache) sudah ada data
         const cachedStudents = localStorage.getItem('kantin_students');
         const cachedProducts = localStorage.getItem('kantin_products');
 
         if (cachedStudents && cachedProducts) {
-            // JIKA DATA ADA DI MEMORI: Langsung pakai & tutup loading saat itu juga (SATSET!)
+            // JIKA DATA ADA: Langsung gunakan tanpa menunggu loading! (Mode Satset)
             localStudents = JSON.parse(cachedStudents);
             localProducts = JSON.parse(cachedProducts);
             
+            // Langsung hilangkan loading dalam 0.3 detik
             const loader = document.getElementById('initial-loader');
             loader.style.opacity = '0';
             setTimeout(() => loader.classList.add('hidden'), 300);
             
-            // Tarik data terbaru dari server secara diam-diam di latar belakang
+            // Secara diam-diam (background), sinkronkan data terbaru dari server
             syncDataBackground();
         } else {
-            // JIKA PERTAMA KALI BUKA BANGAT: Tunggu loading dari server
+            // JIKA DATA KOSONG (Pertama kali buka): Munculkan loading dan ambil dari server
             try {
                 const data = await callAPI('getInitialData');
                 if (data.success) {
                     localStudents = data.students;
                     localProducts = data.products;
                     
-                    // Simpan ke Cache agar besok tidak loading lagi
+                    // Simpan data ke memori HP (Cache) agar besok tidak perlu loading lagi
                     localStorage.setItem('kantin_students', JSON.stringify(localStudents));
                     localStorage.setItem('kantin_products', JSON.stringify(localProducts));
                     
@@ -253,6 +255,7 @@
         }
     }
 
+    // Fungsi untuk menarik data terbaru di latar belakang (tanpa mengganggu kasir)
     async function syncDataBackground() {
         try {
             const data = await callAPI('getInitialData');
@@ -260,11 +263,11 @@
                 localStudents = data.students;
                 localProducts = data.products;
                 
-                // Perbarui memori cache dengan data yang paling baru (segar)
+                // Perbarui memori cache dengan data terbaru
                 localStorage.setItem('kantin_students', JSON.stringify(localStudents));
                 localStorage.setItem('kantin_products', JSON.stringify(localProducts));
                 
-                // Perbarui tampilan secara "live" jika data selesai diunduh saat kasir sedang melayani pembeli
+                // Jika sedang melayani santri, otomatis update sisa saldonya di layar
                 if (currentStudent) {
                     const freshStudentData = localStudents.find(s => s.id === currentStudent.id);
                     if (freshStudentData) {
@@ -275,7 +278,7 @@
                 }
             }
         } catch (e) {
-            console.log("Background sync gagal (mungkin sinyal jelek), tetap pakai data cache lokal.");
+            console.log("Sinkronisasi latar belakang gagal (mungkin sinyal lemah), menggunakan data lokal sementara.");
         }
     }
 
