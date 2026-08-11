@@ -634,16 +634,19 @@
         cart.forEach((item, index) => {
             total += item.price * item.quantity;
             const li = document.createElement('li');
-            li.className = 'flex justify-between items-center p-3 bg-white border border-gray-100 rounded shadow-sm';
+            li.className = 'flex flex-col p-3 bg-white border border-gray-200 rounded-lg shadow-sm mb-3';
             li.innerHTML = `
-                <div>
-                    <span class="font-medium text-gray-800">${item.name}</span>
-                    <br>
-                    <span class="text-sm text-gray-500">${item.quantity} x ${formatRupiah(item.price)}</span>
+                <div class="flex justify-between items-start mb-2">
+                    <span class="font-semibold text-gray-800">${item.name} <span class="text-xs text-gray-500 font-normal ml-1">(@${formatRupiah(item.price)})</span></span>
+                    <button onclick="deleteFromCart(${index})" class="text-gray-400 hover:text-red-500 font-bold text-2xl px-2 leading-none" title="Hapus Barang">&times;</button>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <span class="font-bold text-gray-700">${formatRupiah(item.price * item.quantity)}</span>
-                    <button onclick="removeFromCart(${index})" class="text-red-500 hover:text-red-700 bg-red-50 w-8 h-8 rounded-full flex items-center justify-center font-bold text-xl">&times;</button>
+                <div class="flex justify-between items-center mt-1">
+                    <div class="flex items-center border border-gray-300 rounded-md overflow-hidden shadow-sm">
+                        <button onclick="decreaseQuantity(${index})" class="px-4 py-1.5 bg-gray-50 hover:bg-gray-200 text-gray-700 border-r border-gray-300 font-bold text-lg active:bg-gray-300 transition-colors">-</button>
+                        <span class="px-4 py-1.5 font-semibold text-sm bg-white min-w-[2.5rem] text-center">${item.quantity}</span>
+                        <button onclick="increaseQuantity(${index})" class="px-4 py-1.5 bg-gray-50 hover:bg-gray-200 text-gray-700 border-l border-gray-300 font-bold text-lg active:bg-gray-300 transition-colors">+</button>
+                    </div>
+                    <span class="font-bold text-blue-700 text-lg">${formatRupiah(item.price * item.quantity)}</span>
                 </div>
             `;
             cartItemsEl.appendChild(li);
@@ -651,11 +654,34 @@
         cartTotalEl.textContent = formatRupiah(total);
     }
     
-    function removeFromCart(index) {
+    function increaseQuantity(index) {
+        let product = cart[index];
+        // Cek limit harian jika bukan unlimited
+        if (!currentStudent.isUnlimited) {
+            let cartTotal = cart.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+            let projectedTotal = currentStudent.todaysSpending + cartTotal + parseFloat(product.price);
+            
+            if (projectedTotal > currentStudent.limit) {
+                showNotification("Gagal: Total belanja akan melebihi limit harian!", true);
+                return; 
+            }
+        }
+        cart[index].quantity++;
+        updateCartUI();
+    }
+
+    function decreaseQuantity(index) {
         cart[index].quantity--;
+        // Jika dikurangi sampai 0, otomatis hapus dari keranjang
         if(cart[index].quantity === 0) {
             cart.splice(index, 1);
         }
+        updateCartUI();
+    }
+
+    function deleteFromCart(index) {
+        // Langsung hapus barang dari keranjang
+        cart.splice(index, 1);
         updateCartUI();
     }
     
