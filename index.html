@@ -484,8 +484,11 @@
         if (!product) {
             showNotification(`Barang tidak ditemukan di database.`);
         } else {
-            addToCart(product);
-            showNotification(`Berhasil scan: ${product.name}`, false);
+            // Cek apakah barang BERHASIL dimasukkan ke keranjang (tidak ditolak oleh limit)
+            const isAdded = addToCart(product);
+            if (isAdded) {
+                showNotification(`Berhasil scan: ${product.name}`, false);
+            }
         }
         resumeScannerAfterDelay();
     }
@@ -504,8 +507,8 @@
         if (!currentStudent.isUnlimited) {
             let cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
             if (currentStudent.todaysSpending + cartTotal + product.price > currentStudent.limit) {
-                showNotification("Total belanja akan melebihi limit harian!");
-                return;
+                showNotification("Gagal: Total belanja akan melebihi limit harian!");
+                return false; // Kembalikan nilai FALSE agar scanner tahu barang ditolak
             }
         }
 
@@ -516,6 +519,7 @@
             cart.push({ ...product, quantity: 1 });
         }
         updateCartUI();
+        return true; // Kembalikan TRUE jika berhasil masuk keranjang
     }
 
     function addManualItemToCart() {
@@ -536,10 +540,13 @@
             price: itemPrice
         };
 
-        addToCart(product);
-        document.getElementById('manual-item-name').value = '';
-        document.getElementById('manual-item-price').value = '';
-        document.getElementById('manual-item-name').focus();
+        // Jika berhasil ditambahkan (tidak kena limit), baru inputannya dikosongkan
+        const isAdded = addToCart(product);
+        if (isAdded) {
+            document.getElementById('manual-item-name').value = '';
+            document.getElementById('manual-item-price').value = '';
+            document.getElementById('manual-item-name').focus();
+        }
     }
 
     function updateCartUI() {
