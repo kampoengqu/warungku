@@ -139,6 +139,9 @@
         </div>
     </div>
 
+    <!-- Elemen Audio untuk Efek Suara Scan -->
+    <audio id="beep-sound" src="barcodebeep.mp3" preload="auto"></audio>
+
     <div id="content-cek-saldo" class="tab-content hidden">
         <div class="bg-white p-6 rounded-lg shadow-md">
              <div class="mb-4 relative">
@@ -336,6 +339,15 @@
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
     }
     
+    // Fungsi untuk memutar suara beep
+    function playBeep() {
+        const beep = document.getElementById('beep-sound');
+        if (beep) {
+            beep.currentTime = 0; // Reset waktu agar bisa diputar cepat berulang-ulang
+            beep.play().catch(e => console.log("Gagal memutar suara:", e)); // Abaikan error jika browser memblokir autoplay
+        }
+    }
+
     function changeTab(tabName) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
         document.getElementById(`content-${tabName}`).classList.remove('hidden');
@@ -481,8 +493,9 @@
         // Coba tambahkan ke keranjang. Fungsi addToCart akan mengecek limit.
         const isAdded = addToCart(product);
         
-        // HANYA tampilkan notifikasi hijau JIKA barang lolos dari limit
+        // HANYA tampilkan notifikasi hijau dan PUTAR BEEP JIKA barang lolos dari limit
         if (isAdded === true) {
+            playBeep();
             showNotification(`Berhasil scan: ${product.name}`, false);
         }
         
