@@ -207,28 +207,75 @@
         }
     }
 
-    // --- INITIAL DATA FETCH (PRE-FETCHING) ---
+    // --- INITIAL DATA FETCH (PRE-FETCHING & CACHE) ---
     async function initApp() {
         if (API_URL.includes("ISI_DENGAN_URL")) {
             document.getElementById('initial-loader').innerHTML = '<h2 class="text-red-500 font-bold text-xl mb-2">Error Setup</h2><p class="text-gray-600">Anda belum memasukkan URL API di script index.html.</p>';
             return;
         }
 
+        // Cek penyimpanan memori lokal (Cache)
+        const cachedStudents = localStorage.getItem('kantin_students');
+        const cachedProducts = localStorage.getItem('kantin_products');
+
+        if (cachedStudents && cachedProducts) {
+            // JIKA DATA ADA DI MEMORI: Langsung pakai & tutup loading saat itu juga (SATSET!)
+            localStudents = JSON.parse(cachedStudents);
+            localProducts = JSON.parse(cachedProducts);
+            
+            const loader = document.getElementById('initial-loader');
+            loader.style.opacity = '0';
+            setTimeout(() => loader.classList.add('hidden'), 300);
+            
+            // Tarik data terbaru dari server secara diam-diam di latar belakang
+            syncDataBackground();
+        } else {
+            // JIKA PERTAMA KALI BUKA BANGAT: Tunggu loading dari server
+            try {
+                const data = await callAPI('getInitialData');
+                if (data.success) {
+                    localStudents = data.students;
+                    localProducts = data.products;
+                    
+                    // Simpan ke Cache agar besok tidak loading lagi
+                    localStorage.setItem('kantin_students', JSON.stringify(localStudents));
+                    localStorage.setItem('kantin_products', JSON.stringify(localProducts));
+                    
+                    const loader = document.getElementById('initial-loader');
+                    loader.style.opacity = '0';
+                    setTimeout(() => loader.classList.add('hidden'), 300);
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                document.getElementById('initial-loader').innerHTML = `<h2 class="text-red-500 font-bold text-xl mb-2">Gagal Memuat</h2><p class="text-gray-600 text-center px-4">${err.message}<br><button onclick="location.reload()" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded">Coba Lagi</button></p>`;
+            }
+        }
+    }
+
+    async function syncDataBackground() {
         try {
             const data = await callAPI('getInitialData');
             if (data.success) {
                 localStudents = data.students;
                 localProducts = data.products;
                 
-                // Sembunyikan loader dengan animasi transisi
-                const loader = document.getElementById('initial-loader');
-                loader.style.opacity = '0';
-                setTimeout(() => loader.classList.add('hidden'), 300);
-            } else {
-                throw new Error(data.error);
+                // Perbarui memori cache dengan data yang paling baru (segar)
+                localStorage.setItem('kantin_students', JSON.stringify(localStudents));
+                localStorage.setItem('kantin_products', JSON.stringify(localProducts));
+                
+                // Perbarui tampilan secara "live" jika data selesai diunduh saat kasir sedang melayani pembeli
+                if (currentStudent) {
+                    const freshStudentData = localStudents.find(s => s.id === currentStudent.id);
+                    if (freshStudentData) {
+                        currentStudent = freshStudentData;
+                        const context = document.getElementById('kasir-section').classList.contains('hidden') ? 'saldo' : 'kasir';
+                        updateStudentInfoUI(context, currentStudent);
+                    }
+                }
             }
-        } catch (err) {
-            document.getElementById('initial-loader').innerHTML = `<h2 class="text-red-500 font-bold text-xl mb-2">Gagal Memuat</h2><p class="text-gray-600 text-center px-4">${err.message}<br><button onclick="location.reload()" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded">Coba Lagi</button></p>`;
+        } catch (e) {
+            console.log("Background sync gagal (mungkin sinyal jelek), tetap pakai data cache lokal.");
         }
     }
 
