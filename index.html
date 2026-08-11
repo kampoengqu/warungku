@@ -2,9 +2,8 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <!-- TAG VIEWPORT INI YANG MEMBUAT TAMPILAN PAS DI HP (TIDAK KECIL-KECIL) -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kantin Pesantren Digital</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
@@ -14,9 +13,20 @@
             color: #3b82f6;
             font-weight: 600;
         }
+        /* Custom scrollbar untuk dropdown */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body class="bg-gray-100 text-gray-800 relative min-h-screen">
+
+<div id="initial-loader" class="fixed inset-0 bg-white/95 z-[100] flex flex-col items-center justify-center transition-opacity duration-300">
+    <div class="animate-spin rounded-full h-14 w-14 border-4 border-gray-200 border-t-blue-600 mb-4"></div>
+    <h2 class="text-xl font-bold text-gray-800 mb-1">Mempersiapkan Kasir</h2>
+    <p class="text-gray-500 text-sm font-medium animate-pulse">Mengunduh data agar transaksi lebih cepat...</p>
+</div>
 
 <div class="container mx-auto p-4 max-w-2xl">
 
@@ -42,61 +52,60 @@
     <!-- Konten Tab -->
     <div id="content-kasir" class="tab-content">
         <div class="bg-white p-6 rounded-lg shadow-md">
-            <!-- Pencarian Santri -->
-            <div class="mb-4">
-                <label for="student-id-kasir" class="block text-sm font-medium text-gray-700 mb-1">Cari ID Santri/Pembeli</label>
+            <!-- Pencarian Santri dengan Autocomplete -->
+            <div class="mb-4 relative">
+                <label for="student-id-kasir" class="block text-sm font-medium text-gray-700 mb-1">Cari ID atau Nama Pembeli</label>
                 <div class="flex space-x-2">
-                    <input type="text" id="student-id-kasir" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Masukkan ID Santri/Pembeli...">
-                    <button onclick="findStudent('kasir')" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Cari</button>
+                    <div class="relative w-full">
+                        <input type="text" id="student-id-kasir" autocomplete="off" oninput="handleStudentAutocomplete('kasir')" onfocus="handleStudentAutocomplete('kasir')" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Ketik Nama / ID...">
+                        <!-- Dropdown Autocomplete Santri -->
+                        <ul id="autocomplete-list-kasir" class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto hidden custom-scrollbar mt-1"></ul>
+                    </div>
+                    <button onclick="findStudent('kasir')" id="btn-cari-kasir" class="mt-1 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-medium">Cari</button>
                 </div>
             </div>
 
             <!-- Informasi Santri -->
-            <div id="student-info-kasir" class="hidden mb-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
+            <div id="student-info-kasir" class="hidden mb-4 p-4 bg-blue-50 border border-blue-100 rounded-lg shadow-inner">
                 <p class="text-lg">Nama: <strong id="student-name-kasir" class="text-blue-800"></strong></p>
                 <p>Sisa Saldo: <strong id="student-balance-kasir" class="text-green-600"></strong></p>
                 <div id="spending-info-kasir">
                     <p class="text-sm text-gray-600 mt-1">Total Belanja Hari Ini: <span id="student-spending-kasir" class="font-semibold"></span></p>
                 </div>
-                <p id="status-info-kasir" class="hidden font-semibold text-green-600 mt-1">Status: Transaksi Tanpa Limit</p>
-                <p class="text-red-500 font-bold hidden mt-1" id="limit-warning-kasir">Anda sudah mencapai batas maksimal transaksi hari ini!</p>
+                <p id="status-info-kasir" class="hidden font-semibold text-green-600 mt-1 bg-green-100 px-2 py-1 rounded inline-block text-sm">Transaksi Tanpa Limit</p>
+                <p class="text-red-500 font-bold hidden mt-1" id="limit-warning-kasir">Mencapai batas maksimal transaksi harian!</p>
             </div>
             
             <div id="kasir-section" class="hidden">
                  <!-- Scanner Barcode -->
                 <div class="mb-4">
-                    <h3 class="text-lg font-semibold mb-2">Scan Barcode / QR Code</h3>
+                    <h3 class="text-lg font-semibold mb-2 text-gray-700">Scan Barcode / QR Code</h3>
                     
-                    <!-- Tombol Pancingan Kamera -->
                     <div id="camera-start-box" class="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50 flex flex-col items-center justify-center space-y-3">
-                        <p class="mb-1 text-sm text-gray-600 font-medium">Sistem siap. Pilih metode Scan:</p>
-                        
-                        <!-- Tombol Coba Kamera Web -->
+                        <p class="mb-1 text-sm text-gray-600 font-medium">Kamera siap. Pilih metode Scan:</p>
                         <button onclick="startScanner()" class="w-full max-w-sm bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200">
-                            🎥 Coba Kamera Web (Scan Langsung)
+                            🎥 Buka Kamera Web (Fast Scan)
                         </button>
-                        
-                        <p class="text-xs text-gray-500 mt-2">Jika tombol biru error/ditolak browser, gunakan tombol hijau:</p>
-                        
-                        <!-- Tombol Hijau Kamera Asli HP -->
-                        <label class="w-full max-w-sm bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 cursor-pointer text-center block relative">
-                            📸 Potret Barcode/QR (Pasti Berhasil)
-                            <div class="text-[10px] font-normal mt-1">Klik, jepret foto barcode, lalu tekan Centang/OK</div>
-                            <input type="file" accept="image/*" capture="environment" id="native-camera-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="handleNativeCamera(event)">
+                        <p class="text-xs text-gray-500">Jika kamera web error di HP, gunakan tombol di bawah:</p>
+                        <label class="w-full max-w-sm bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 cursor-pointer text-center block">
+                            📸 Potret Barcode HP Asli
+                            <input type="file" accept="image/*" capture="environment" id="native-camera-input" class="hidden" onchange="handleNativeCamera(event)">
                         </label>
                     </div>
 
-                    <!-- Kotak Video (Disembunyikan awalnya) -->
+                    <!-- Kotak Video Reader -->
                     <div id="reader" class="w-full border-2 border-blue-300 rounded-lg overflow-hidden hidden" style="max-width: 600px; min-height: 250px;"></div>
                 </div>
 
                 <!-- Input Manual -->
                 <div class="my-6">
-                    <h3 class="text-lg font-semibold mb-2 border-t pt-4 text-gray-600">Atau Input Manual (Jika Scan Gagal)</h3>
-                    <div class="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
-                        <div>
+                    <h3 class="text-lg font-semibold mb-2 border-t pt-4 text-gray-600">Atau Input Manual</h3>
+                    <div class="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200 shadow-sm relative">
+                        <div class="relative">
                             <label for="manual-item-name" class="block text-sm font-medium text-gray-700">Nama Barang</label>
-                            <input type="text" id="manual-item-name" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Contoh: Roti Cokelat">
+                            <input type="text" id="manual-item-name" autocomplete="off" oninput="handleProductAutocomplete()" onfocus="handleProductAutocomplete()" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Ketik nama barang...">
+                            <!-- Dropdown Autocomplete Barang -->
+                            <ul id="autocomplete-list-product" class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden custom-scrollbar mt-1"></ul>
                         </div>
                         <div>
                             <label for="manual-item-price" class="block text-sm font-medium text-gray-700">Harga Satuan (Rp)</label>
@@ -110,21 +119,19 @@
 
                 <!-- Keranjang Belanja -->
                 <div>
-                    <h3 class="text-lg font-semibold mb-2 bg-gray-100 p-2 rounded">Keranjang Belanja</h3>
-                    <ul id="cart-items" class="space-y-2 mb-2">
-                        <!-- Item keranjang akan ditambahkan di sini -->
-                    </ul>
-                    <div id="empty-cart-message" class="text-center text-gray-500 py-4 border border-dashed rounded">Keranjang masih kosong</div>
-                    <hr class="my-3">
+                    <h3 class="text-lg font-semibold mb-2 bg-gray-100 p-2 rounded text-gray-700">Keranjang Belanja</h3>
+                    <ul id="cart-items" class="space-y-2 mb-2"></ul>
+                    <div id="empty-cart-message" class="text-center text-gray-400 py-4 border border-dashed border-gray-300 rounded">Keranjang masih kosong</div>
+                    <hr class="my-3 border-gray-200">
                     <div class="flex justify-between items-center font-bold text-xl px-2">
-                        <span>Total:</span>
+                        <span class="text-gray-700">Total:</span>
                         <span id="cart-total" class="text-blue-700">Rp 0</span>
                     </div>
                 </div>
 
                 <!-- Tombol Transaksi -->
                 <div class="mt-6">
-                    <button onclick="completeTransaction()" id="btn-complete-transaction" class="w-full bg-green-500 text-white py-3 rounded-lg text-lg font-bold hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400" disabled>
+                    <button onclick="completeTransaction()" id="btn-complete-transaction" class="w-full bg-green-500 text-white py-3 rounded-lg text-lg font-bold hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400 shadow-md" disabled>
                         Selesaikan Transaksi
                     </button>
                 </div>
@@ -134,30 +141,32 @@
 
     <div id="content-cek-saldo" class="tab-content hidden">
         <div class="bg-white p-6 rounded-lg shadow-md">
-            <!-- Pencarian Santri -->
-             <div class="mb-4">
-                <label for="student-id-saldo" class="block text-sm font-medium text-gray-700 mb-1">Masukkan ID Santri/Pembeli</label>
+             <div class="mb-4 relative">
+                <label for="student-id-saldo" class="block text-sm font-medium text-gray-700 mb-1">Cari ID atau Nama Santri</label>
                 <div class="flex space-x-2">
-                    <input type="text" id="student-id-saldo" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Masukkan ID Santri/Pembeli...">
-                    <button onclick="findStudent('saldo')" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Cek</button>
+                    <div class="relative w-full">
+                        <input type="text" id="student-id-saldo" autocomplete="off" oninput="handleStudentAutocomplete('saldo')" onfocus="handleStudentAutocomplete('saldo')" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Ketik Nama / ID...">
+                        <!-- Dropdown Autocomplete Saldo -->
+                        <ul id="autocomplete-list-saldo" class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto hidden custom-scrollbar mt-1"></ul>
+                    </div>
+                    <button onclick="findStudent('saldo')" id="btn-cari-saldo" class="mt-1 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-medium">Cek</button>
                 </div>
             </div>
             
-            <!-- Informasi Saldo -->
             <div id="student-info-saldo" class="hidden mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <h3 class="text-xl font-bold mb-2 text-gray-800">Informasi Akun</h3>
+                <h3 class="text-xl font-bold mb-3 text-gray-800 border-b pb-2">Informasi Akun</h3>
                 <div class="space-y-2">
                     <p class="text-lg">Nama: <strong id="student-name-saldo" class="text-blue-700"></strong></p>
-                    <p>Sisa Saldo: <strong id="student-balance-saldo" class="text-green-600 text-lg"></strong></p>
-                    <div id="spending-info-saldo" class="bg-white p-2 rounded border mt-2">
-                        <p>Total Belanja Hari Ini: <strong id="student-spending-saldo" class="text-yellow-600"></strong></p>
-                        <p>Limit Harian: <strong id="student-limit-saldo"></strong></p>
+                    <p>Sisa Saldo: <strong id="student-balance-saldo" class="text-green-600 text-xl"></strong></p>
+                    <div id="spending-info-saldo" class="bg-white p-3 rounded-md border shadow-sm mt-3">
+                        <p class="text-gray-600">Total Belanja Hari Ini: <strong id="student-spending-saldo" class="text-yellow-600"></strong></p>
+                        <p class="text-gray-600">Limit Harian: <strong id="student-limit-saldo" class="text-gray-800"></strong></p>
                     </div>
-                    <p id="status-info-saldo" class="hidden font-semibold text-green-600 bg-green-50 p-2 rounded border border-green-200">Status: Transaksi Tanpa Limit</p>
+                    <p id="status-info-saldo" class="hidden font-semibold text-green-700 bg-green-100 p-3 rounded-md border border-green-200 mt-3 text-center">Status: Akses Transaksi Tanpa Limit</p>
                 </div>
-                 <div id="limit-warning-saldo" class="hidden mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
-                    <p class="font-bold">Perhatian!</p>
-                    <p>Kamu sudah mencapai batas maksimal transaksi hari ini!</p>
+                 <div id="limit-warning-saldo" class="hidden mt-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-r-md">
+                    <p class="font-bold flex items-center"><span class="text-xl mr-2">⚠️</span> Perhatian!</p>
+                    <p class="text-sm mt-1">Kamu sudah mencapai batas maksimal transaksi hari ini!</p>
                 </div>
             </div>
         </div>
@@ -166,36 +175,148 @@
 </div>
 
 <script>
-    // --- KONFIGURASI API (UNTUK GITHUB) ---
+    // --- KONFIGURASI API ---
     // GANTI dengan URL Web App Apps Script Anda (yang diakhiri /exec)
-    const API_URL = "https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEStCNUglng8YpUXdfYxGGlSj/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEstCNUglng8YpUXdfYxGGlSj/exec";
 
-    // Fungsi Jembatan API
-    async function callAPI(action, payload = {}) {
-        try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: {
-                    // Wajib text/plain agar tidak diblokir sistem keamanan CORS Google
-                    "Content-Type": "text/plain;charset=utf-8", 
-                },
-                body: JSON.stringify({ action: action, ...payload })
-            });
-            return await response.json();
-        } catch (error) {
-            console.error("API Error:", error);
-            throw new Error("Gagal terhubung ke server database.");
-        }
-    }
-
-    // State management
+    // --- STATE & DATABASE LOKAL ---
+    let localStudents = []; // Cache semua data santri
+    let localProducts = []; // Cache semua data barang
+    
     let currentStudent = null;
     let cart = [];
     let scanner = new Html5Qrcode("reader"); 
     let isCameraRunning = false; 
     let isProcessingScan = false; 
 
-    // Utility Functions
+    // --- FUNGSI JEMBATAN API ---
+    async function callAPI(action, payload = {}) {
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ action: action, ...payload })
+            });
+            return await response.json();
+        } catch (error) {
+            console.error("API Error:", error);
+            throw new Error("Gagal terhubung ke database server.");
+        }
+    }
+
+    // --- INITIAL DATA FETCH (PRE-FETCHING) ---
+    async function initApp() {
+        if (API_URL.includes("ISI_DENGAN_URL")) {
+            document.getElementById('initial-loader').innerHTML = '<h2 class="text-red-500 font-bold text-xl mb-2">Error Setup</h2><p class="text-gray-600">Anda belum memasukkan URL API di script index.html.</p>';
+            return;
+        }
+
+        try {
+            const data = await callAPI('getInitialData');
+            if (data.success) {
+                localStudents = data.students;
+                localProducts = data.products;
+                
+                // Sembunyikan loader dengan animasi transisi
+                const loader = document.getElementById('initial-loader');
+                loader.style.opacity = '0';
+                setTimeout(() => loader.classList.add('hidden'), 300);
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (err) {
+            document.getElementById('initial-loader').innerHTML = `<h2 class="text-red-500 font-bold text-xl mb-2">Gagal Memuat</h2><p class="text-gray-600 text-center px-4">${err.message}<br><button onclick="location.reload()" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded">Coba Lagi</button></p>`;
+        }
+    }
+
+    // Panggil saat halaman pertama kali dimuat
+    document.addEventListener("DOMContentLoaded", initApp);
+
+
+    // --- AUTOCOMPLETE SANTRI ---
+    function handleStudentAutocomplete(context) {
+        const inputEl = document.getElementById(`student-id-${context}`);
+        const listEl = document.getElementById(`autocomplete-list-${context}`);
+        const query = inputEl.value.toLowerCase().trim();
+
+        listEl.innerHTML = ''; // Bersihkan list sebelumnya
+
+        if (!query) {
+            listEl.classList.add('hidden');
+            return;
+        }
+
+        // Cari berdasarkan ID atau Nama (Maksimal tampilkan 10 hasil agar tidak berat)
+        const matches = localStudents.filter(s => 
+            s.id.toLowerCase().includes(query) || s.name.toLowerCase().includes(query)
+        ).slice(0, 10);
+
+        if (matches.length > 0) {
+            matches.forEach(student => {
+                const li = document.createElement('li');
+                li.className = 'px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0';
+                li.innerHTML = `<div class="font-semibold text-gray-800">${student.name}</div><div class="text-xs text-gray-500">ID: ${student.id}</div>`;
+                li.onclick = () => {
+                    inputEl.value = student.id; // Otomatis isi ID
+                    listEl.classList.add('hidden');
+                    findStudent(context); // Langsung cari otomatis!
+                };
+                listEl.appendChild(li);
+            });
+            listEl.classList.remove('hidden');
+        } else {
+            listEl.classList.add('hidden');
+        }
+    }
+
+    // --- AUTOCOMPLETE BARANG (MANUAL) ---
+    function handleProductAutocomplete() {
+        const inputEl = document.getElementById('manual-item-name');
+        const priceEl = document.getElementById('manual-item-price');
+        const listEl = document.getElementById('autocomplete-list-product');
+        const query = inputEl.value.toLowerCase().trim();
+
+        listEl.innerHTML = '';
+
+        if (!query) {
+            listEl.classList.add('hidden');
+            return;
+        }
+
+        const matches = localProducts.filter(p => 
+            p.name.toLowerCase().includes(query) || p.barcode.toLowerCase().includes(query)
+        ).slice(0, 8); // Tampilkan max 8
+
+        if (matches.length > 0) {
+            matches.forEach(product => {
+                const li = document.createElement('li');
+                li.className = 'px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0 flex justify-between items-center';
+                li.innerHTML = `<span class="font-medium text-gray-700">${product.name}</span> <span class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">${formatRupiah(product.price)}</span>`;
+                li.onclick = () => {
+                    inputEl.value = product.name; 
+                    priceEl.value = product.price; // OTOMATIS ISI HARGA!
+                    listEl.classList.add('hidden');
+                };
+                listEl.appendChild(li);
+            });
+            listEl.classList.remove('hidden');
+        } else {
+            listEl.classList.add('hidden');
+        }
+    }
+
+    // Tutup dropdown jika klik di luar
+    document.addEventListener('click', function(e) {
+        const dropKasir = document.getElementById('autocomplete-list-kasir');
+        const dropSaldo = document.getElementById('autocomplete-list-saldo');
+        const dropProd = document.getElementById('autocomplete-list-product');
+        
+        if (dropKasir && !e.target.closest('#student-id-kasir')) dropKasir.classList.add('hidden');
+        if (dropSaldo && !e.target.closest('#student-id-saldo')) dropSaldo.classList.add('hidden');
+        if (dropProd && !e.target.closest('#manual-item-name')) dropProd.classList.add('hidden');
+    });
+
+    // --- UTILITIES ---
     function showNotification(message, isError = true) {
         const notif = document.getElementById('notification');
         const notifMessage = document.getElementById('notification-message');
@@ -215,57 +336,36 @@
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number);
     }
     
-    function startLoading(button) {
-      if(button) {
-        button.disabled = true;
-        button.innerHTML = '<span class="animate-spin mr-2">...</span> Memproses';
-      }
-    }
-
-    function stopLoading(button, defaultText) {
-      if(button) {
-        button.disabled = false;
-        button.innerHTML = defaultText;
-      }
-    }
-
     function changeTab(tabName) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
         document.getElementById(`content-${tabName}`).classList.remove('hidden');
-
         document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
         document.getElementById(`tab-${tabName}`).classList.add('active');
     }
 
-    // Student Management
-    async function findStudent(context) {
-        const studentId = document.getElementById(`student-id-${context}`).value;
-        if (!studentId) {
-            showNotification("ID Pembeli tidak boleh kosong.");
+    // --- PENCARIAN SANTRI INSTAN (LOKAL) ---
+    function findStudent(context) {
+        const inputId = document.getElementById(`student-id-${context}`).value.trim().toLowerCase();
+        if (!inputId) {
+            showNotification("Nama atau ID Pembeli tidak boleh kosong.");
             return;
         }
-        
-        const button = event.target;
-        startLoading(button);
 
-        try {
-            const student = await callAPI('getStudentInfo', { studentId: studentId });
-            stopLoading(button, context === 'kasir' ? 'Cari' : 'Cek');
-            
-            if (student.error) {
-                showNotification(student.error);
-                resetKasir();
-            } else {
-                currentStudent = student;
-                updateStudentInfoUI(context, student);
-                if(context === 'kasir'){
-                  document.getElementById('kasir-section').classList.remove('hidden');
-                }
-            }
-        } catch (err) {
-            stopLoading(button, context === 'kasir' ? 'Cari' : 'Cek');
-            showNotification(err.message);
+        // Cek langsung dari memori tanpa API
+        const student = localStudents.find(s => s.id.toLowerCase() === inputId || s.name.toLowerCase() === inputId);
+
+        if (!student) {
+            showNotification("Data Santri tidak ditemukan.");
             resetKasir();
+        } else {
+            currentStudent = student;
+            // Sinkronkan text input dengan ID yang benar
+            document.getElementById(`student-id-${context}`).value = student.id; 
+            updateStudentInfoUI(context, student);
+            
+            if(context === 'kasir'){
+                document.getElementById('kasir-section').classList.remove('hidden');
+            }
         }
     }
 
@@ -299,7 +399,7 @@
         }
     }
     
-    // Barcode Scanner Kamera Web (Biru)
+    // --- BARCODE SCANNER (HIGH FPS & INSTANT LOOKUP) ---
     function startScanner() {
         if (!currentStudent) return;
         if (isProcessingScan) return; 
@@ -310,8 +410,8 @@
         btnBox.classList.add('hidden');
         readerDiv.classList.remove('hidden');
         
-        // Memperbesar qrbox menjadi kotak 250x250 agar nyaman untuk Barcode DAN QR Code
-        const config = { fps: 15, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+        // Peningkatan FPS ke 30 untuk scan jauh lebih responsif
+        const config = { fps: 30, qrbox: { width: 250, height: 250 } };
         
         const onScanSuccess = (decodedText, decodedResult) => {
             if (isProcessingScan) return;
@@ -321,62 +421,30 @@
                 if(isCameraRunning) scanner.pause(true); 
             } catch(e) {}
             
-            handleBarcodeScan(decodedText);
+            handleBarcodeScanLocal(decodedText);
         };
         
-        const onScanFailure = (error) => { /* abaikan error saat sedang mencari frame */ };
+        const onScanFailure = (error) => { /* abaikan error scanning frame */ };
 
         if (!isCameraRunning) {
-            // Coba buka semua jenis kamera yang diizinkan tanpa paksaan menghadap belakang saja
-            Html5Qrcode.getCameras().then(devices => {
-                if (devices && devices.length) {
-                    // Cari kamera belakang jika ada, jika tidak pakai yang pertama
-                    let cameraId = devices[0].id;
-                    for (let i = 0; i < devices.length; i++) {
-                        if (devices[i].label.toLowerCase().includes("back") || devices[i].label.toLowerCase().includes("belakang") || devices[i].label.toLowerCase().includes("environment")) {
-                            cameraId = devices[i].id;
-                            break;
-                        }
-                    }
-                    // Mulai kamera dengan ID spesifik (Metode paling stabil)
-                    scanner.start(cameraId, config, onScanSuccess, onScanFailure)
+            // Coba kamera belakang (environment) terlebih dahulu
+            scanner.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+                .then(() => { isCameraRunning = true; })
+                .catch(err => {
+                    console.log("Kamera belakang gagal, mencoba kamera depan/default...", err);
+                    scanner.start({ facingMode: "user" }, config, onScanSuccess, onScanFailure)
                         .then(() => { isCameraRunning = true; })
-                        .catch(err => forceFallbackCamera(btnBox, readerDiv));
-                } else {
-                    forceFallbackCamera(btnBox, readerDiv);
-                }
-            }).catch(err => {
-                forceFallbackCamera(btnBox, readerDiv);
-            });
+                        .catch(err2 => {
+                            showNotification("Gagal membuka kamera web. Gunakan Tombol Potret HP Asli.");
+                            btnBox.classList.remove('hidden');
+                            readerDiv.classList.add('hidden');
+                        });
+                });
         } else {
             try { scanner.resume(); } catch(e) {}
         }
     }
 
-    // Fungsi paksaan jika algoritma kamera gagal
-    function forceFallbackCamera(btnBox, readerDiv) {
-        const config = { fps: 15, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
-        // Paksa buka dengan facingMode environment
-        scanner.start({ facingMode: "environment" }, config, 
-            (text) => { if(!isProcessingScan){ isProcessingScan=true; scanner.pause(true); handleBarcodeScan(text); } }, 
-            (err) => {})
-        .then(() => { isCameraRunning = true; })
-        .catch(err2 => {
-            // Gagal total, paksa kamera user/depan
-            scanner.start({ facingMode: "user" }, config, 
-                (text) => { if(!isProcessingScan){ isProcessingScan=true; scanner.pause(true); handleBarcodeScan(text); } }, 
-                (err) => {})
-            .then(() => { isCameraRunning = true; })
-            .catch(err3 => {
-                console.error("Browser memblokir semua akses kamera:", err3);
-                showNotification("Kamera Web Ditolak Browser. Silakan gunakan Tombol Hijau!");
-                btnBox.classList.remove('hidden');
-                readerDiv.classList.add('hidden');
-            });
-        });
-    }
-
-    // Fungsi Scan dari Jepretan Kamera Asli HP (Hijau)
     function handleNativeCamera(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -384,23 +452,23 @@
         if (isProcessingScan) return;
         isProcessingScan = true;
 
-        showNotification("Menganalisa foto barcode/QR...", false);
+        showNotification("Menganalisa barcode dari foto...", false);
 
         const html5QrCode = new Html5Qrcode("reader");
-        
         html5QrCode.scanFile(file, true)
             .then(decodedText => {
-                handleBarcodeScan(decodedText);
+                handleBarcodeScanLocal(decodedText);
                 event.target.value = ''; 
             })
             .catch(err => {
-                showNotification("Gagal membaca! Pastikan foto barcode/QR fokus, terang, dan terlihat jelas.");
+                showNotification("Gagal membaca! Pastikan foto jelas dan terang.");
                 isProcessingScan = false;
                 event.target.value = ''; 
             });
     }
 
-    function handleBarcodeScan(barcode) {
+    // Lookup Barcode LOKAL (Instan, 0 Detik)
+    function handleBarcodeScanLocal(barcode) {
         if (!currentStudent.isUnlimited) {
             let cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
             if (currentStudent.todaysSpending + cartTotal >= currentStudent.limit) {
@@ -410,21 +478,16 @@
             }
         }
 
-        // Panggil API lewat fetch
-        callAPI('getProductByBarcode', { barcode: barcode })
-            .then(product => {
-                if (product.error) {
-                    showNotification(product.error);
-                } else {
-                    addToCart(product);
-                    showNotification(`Berhasil scan: ${product.name}`, false);
-                }
-                resumeScannerAfterDelay();
-            })
-            .catch(err => {
-                showNotification(err.message);
-                resumeScannerAfterDelay();
-            });
+        // Cari barang di memori lokal secara instan
+        const product = localProducts.find(p => p.barcode === barcode.toString());
+
+        if (!product) {
+            showNotification(`Barang tidak ditemukan di database.`);
+        } else {
+            addToCart(product);
+            showNotification(`Berhasil scan: ${product.name}`, false);
+        }
+        resumeScannerAfterDelay();
     }
 
     function resumeScannerAfterDelay() {
@@ -433,10 +496,10 @@
             try { 
                 if(isCameraRunning) scanner.resume(); 
             } catch(e) {}
-        }, 1500); 
+        }, 1200); // Dipercepat dari 1500ms menjadi 1200ms
     }
 
-    // Cart Management
+    // --- CART MANAGEMENT ---
     function addToCart(product) {
         if (!currentStudent.isUnlimited) {
             let cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -464,8 +527,11 @@
             return;
         }
 
+        // Cek apakah item manual ini kebetulan ada di database
+        const existingProduct = localProducts.find(p => p.name.toLowerCase() === itemName.toLowerCase());
+        
         const product = {
-            barcode: `MANUAL-${Date.now()}`,
+            barcode: existingProduct ? existingProduct.barcode : `MANUAL-${Date.now()}`,
             name: itemName,
             price: itemPrice
         };
@@ -496,16 +562,16 @@
         cart.forEach((item, index) => {
             total += item.price * item.quantity;
             const li = document.createElement('li');
-            li.className = 'flex justify-between items-center p-2 bg-white border rounded shadow-sm';
+            li.className = 'flex justify-between items-center p-3 bg-white border border-gray-100 rounded shadow-sm';
             li.innerHTML = `
                 <div>
                     <span class="font-medium text-gray-800">${item.name}</span>
                     <br>
                     <span class="text-sm text-gray-500">${item.quantity} x ${formatRupiah(item.price)}</span>
                 </div>
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center space-x-4">
                     <span class="font-bold text-gray-700">${formatRupiah(item.price * item.quantity)}</span>
-                    <button onclick="removeFromCart(${index})" class="text-red-500 hover:text-red-700 font-bold text-xl">&times;</button>
+                    <button onclick="removeFromCart(${index})" class="text-red-500 hover:text-red-700 bg-red-50 w-8 h-8 rounded-full flex items-center justify-center font-bold text-xl">&times;</button>
                 </div>
             `;
             cartItemsEl.appendChild(li);
@@ -515,13 +581,13 @@
     
     function removeFromCart(index) {
         cart[index].quantity--;
-        if(cart[index].quantity === 0){
+        if(cart[index].quantity === 0) {
             cart.splice(index, 1);
         }
         updateCartUI();
     }
     
-    // Transaction
+    // --- TRANSAKSI (API KE SPREADSHEET) ---
     function completeTransaction() {
         if (cart.length === 0 || !currentStudent) {
             showNotification("Keranjang kosong atau pembeli belum dipilih.");
@@ -529,22 +595,37 @@
         }
 
         const button = document.getElementById('btn-complete-transaction');
-        startLoading(button);
+        const defaultText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<span class="animate-spin inline-block mr-2 border-2 border-white border-t-transparent rounded-full w-4 h-4"></span> Memproses...';
 
-        // Panggil API lewat fetch
+        // Kita TETAP harus memanggil API saat menyimpan transaksi (karena ini menulis ke Database)
         callAPI('processTransaction', { cart: cart, studentId: currentStudent.id })
             .then(response => {
-                stopLoading(button, 'Selesaikan Transaksi');
+                button.disabled = false;
+                button.innerHTML = defaultText;
+                
                 if(response.success){
-                    showNotification(response.message, false);
+                    showNotification("Transaksi Berhasil!", false);
+                    
+                    // Update saldo secara lokal agar tidak perlu merefresh browser
+                    let cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                    currentStudent.balance -= cartTotal;
+                    currentStudent.todaysSpending += cartTotal;
+                    
+                    // Update data di array lokal utama
+                    const studentIndex = localStudents.findIndex(s => s.id === currentStudent.id);
+                    if(studentIndex > -1) localStudents[studentIndex] = currentStudent;
+
                     resetKasir();
                 } else {
                     showNotification(response.message);
                 }
             })
             .catch(err => {
-                stopLoading(button, 'Selesaikan Transaksi');
-                showNotification(err.message);
+                button.disabled = false;
+                button.innerHTML = defaultText;
+                showNotification("Gagal memproses transaksi: " + err.message);
             });
     }
     
@@ -557,16 +638,11 @@
         document.getElementById('student-info-kasir').classList.add('hidden');
         document.getElementById('kasir-section').classList.add('hidden');
         
-        // Kembalikan tampilan kamera ke tombol
         document.getElementById('camera-start-box').classList.remove('hidden');
         document.getElementById('reader').classList.add('hidden');
         
         if (isCameraRunning) {
-            scanner.stop().then(() => {
-                isCameraRunning = false;
-            }).catch(err => {
-                isCameraRunning = false;
-            });
+            scanner.stop().then(() => { isCameraRunning = false; }).catch(err => { isCameraRunning = false; });
         }
     }
     
