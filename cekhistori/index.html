@@ -23,6 +23,11 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Custom scrollbar untuk dropdown */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,8 +43,12 @@
         </div>
 
         <!-- Form Pencarian -->
-        <div class="flex flex-col sm:flex-row gap-3 mb-6">
-            <input type="text" id="searchInput" placeholder="Ketik ID atau Nama Santri..." class="flex-grow w-full px-4 py-3 text-gray-700 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+        <div class="flex flex-col sm:flex-row gap-3 mb-6 relative">
+            <div class="relative flex-grow w-full">
+                <input type="text" id="searchInput" autocomplete="off" placeholder="Ketik ID atau Nama Santri..." class="w-full px-4 py-3 text-gray-700 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <!-- Dropdown Autocomplete -->
+                <ul id="autocomplete-list" class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto hidden custom-scrollbar mt-1"></ul>
+            </div>
             <button id="searchButton" class="w-full sm:w-auto bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 shadow">
                 Cari
             </button>
@@ -61,7 +70,7 @@
     <script>
         // --- KONFIGURASI ---
         // GANTI URL DI BAWAH INI DENGAN URL APLIKASI WEB DARI GOOGLE APPS SCRIPT ANDA
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEStCNUglng8YpUXdfYxGGlSj/exec';
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEstCNUglng8YpUXdfYxGGlSj/exec';
         // --- AKHIR KONFIGURASI ---
 
         const searchInput = document.getElementById('searchInput');
@@ -73,6 +82,7 @@
 
         // Cache data untuk performa
         let allData = [];
+        let uniqueStudents = []; // Cache nama/id santri unik untuk autocomplete
 
         // Fungsi untuk mengambil data saat pertama kali dimuat
         const initialFetch = async () => {
@@ -91,6 +101,16 @@
                     throw new Error(`Gagal mengambil data (status: ${response.status}).`);
                 }
                 allData = await response.json();
+                
+                // Ekstrak data unik untuk autocomplete (berdasarkan histori belanja)
+                const studentMap = new Map();
+                allData.forEach(row => {
+                    if(row['ID_Santri'] && row['Nama_Santri']) {
+                        studentMap.set(String(row['ID_Santri']), String(row['Nama_Santri']));
+                    }
+                });
+                uniqueStudents = Array.from(studentMap, ([id, name]) => ({id, name}));
+
                 message.textContent = 'Selamat datang! Masukkan ID atau Nama Santri untuk melihat histori belanja.';
             } catch (error) {
                 console.error('Detail Kesalahan:', error);
@@ -104,6 +124,9 @@
         // Fungsi untuk mencari dan menampilkan data dari cache
         const searchData = () => {
             const query = searchInput.value.trim().toLowerCase();
+            const listEl = document.getElementById('autocomplete-list');
+            if(listEl) listEl.classList.add('hidden'); // Sembunyikan dropdown saat mencari
+
             if (!query) {
                 message.textContent = 'Silakan masukkan ID atau nama untuk memulai pencarian.';
                 tableContainer.innerHTML = '';
@@ -230,6 +253,49 @@
             `;
             tableContainer.appendChild(totalElement);
         };
+
+        // --- FITUR AUTOCOMPLETE ---
+        searchInput.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            const listEl = document.getElementById('autocomplete-list');
+            listEl.innerHTML = '';
+
+            if (!query) {
+                listEl.classList.add('hidden');
+                return;
+            }
+
+            // Filter dari data uniqueStudents
+            const matches = uniqueStudents.filter(s => 
+                s.id.toLowerCase().includes(query) || s.name.toLowerCase().includes(query)
+            ).slice(0, 10); // Batasi 10 hasil maksimal
+
+            if (matches.length > 0) {
+                matches.forEach(student => {
+                    const li = document.createElement('li');
+                    li.className = 'px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0';
+                    li.innerHTML = `<div class="font-semibold text-gray-800">${student.name}</div><div class="text-xs text-gray-500">ID: ${student.id}</div>`;
+                    li.onclick = () => {
+                        searchInput.value = student.id; 
+                        listEl.classList.add('hidden');
+                        searchData(); // Langsung cari otomatis ketika diklik!
+                    };
+                    listEl.appendChild(li);
+                });
+                listEl.classList.remove('hidden');
+            } else {
+                listEl.classList.add('hidden');
+            }
+        });
+
+        // Sembunyikan dropdown jika klik di luar area input
+        document.addEventListener('click', function(e) {
+            const listEl = document.getElementById('autocomplete-list');
+            if (listEl && !e.target.closest('#searchInput')) {
+                listEl.classList.add('hidden');
+            }
+        });
+        // --- AKHIR FITUR AUTOCOMPLETE ---
 
         searchButton.addEventListener('click', searchData);
         searchInput.addEventListener('keyup', (event) => {
