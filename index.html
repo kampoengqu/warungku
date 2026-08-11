@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <!-- TAG VIEWPORT INI YANG MEMBUAT TAMPILAN PAS DI HP (TIDAK KECIL-KECIL) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base target="_top">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -163,6 +166,28 @@
 </div>
 
 <script>
+    // --- KONFIGURASI API (UNTUK GITHUB) ---
+    // GANTI dengan URL Web App Apps Script Anda (yang diakhiri /exec)
+    const API_URL = "ISI_DENGAN_URL_WEB_APP_ANDA_DISINI";
+
+    // Fungsi Jembatan API
+    async function callAPI(action, payload = {}) {
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    // Wajib text/plain agar tidak diblokir sistem keamanan CORS Google
+                    "Content-Type": "text/plain;charset=utf-8", 
+                },
+                body: JSON.stringify({ action: action, ...payload })
+            });
+            return await response.json();
+        } catch (error) {
+            console.error("API Error:", error);
+            throw new Error("Gagal terhubung ke server database.");
+        }
+    }
+
     // State management
     let currentStudent = null;
     let cart = [];
@@ -213,7 +238,7 @@
     }
 
     // Student Management
-    function findStudent(context) {
+    async function findStudent(context) {
         const studentId = document.getElementById(`student-id-${context}`).value;
         if (!studentId) {
             showNotification("ID Pembeli tidak boleh kosong.");
@@ -223,26 +248,25 @@
         const button = event.target;
         startLoading(button);
 
-        google.script.run
-            .withSuccessHandler(student => {
-                stopLoading(button, context === 'kasir' ? 'Cari' : 'Cek');
-                if (student.error) {
-                    showNotification(student.error);
-                    resetKasir();
-                } else {
-                    currentStudent = student;
-                    updateStudentInfoUI(context, student);
-                    if(context === 'kasir'){
-                      document.getElementById('kasir-section').classList.remove('hidden');
-                    }
-                }
-            })
-            .withFailureHandler(err => {
-                stopLoading(button, context === 'kasir' ? 'Cari' : 'Cek');
-                showNotification("Gagal mengambil data: " + err.message);
+        try {
+            const student = await callAPI('getStudentInfo', { studentId: studentId });
+            stopLoading(button, context === 'kasir' ? 'Cari' : 'Cek');
+            
+            if (student.error) {
+                showNotification(student.error);
                 resetKasir();
-            })
-            .getStudentInfo(studentId);
+            } else {
+                currentStudent = student;
+                updateStudentInfoUI(context, student);
+                if(context === 'kasir'){
+                  document.getElementById('kasir-section').classList.remove('hidden');
+                }
+            }
+        } catch (err) {
+            stopLoading(button, context === 'kasir' ? 'Cari' : 'Cek');
+            showNotification(err.message);
+            resetKasir();
+        }
     }
 
     function updateStudentInfoUI(context, student) {
@@ -386,8 +410,9 @@
             }
         }
 
-        google.script.run
-            .withSuccessHandler(product => {
+        // Panggil API lewat fetch
+        callAPI('getProductByBarcode', { barcode: barcode })
+            .then(product => {
                 if (product.error) {
                     showNotification(product.error);
                 } else {
@@ -396,11 +421,10 @@
                 }
                 resumeScannerAfterDelay();
             })
-            .withFailureHandler(err => {
-                showNotification("Error: " + err.message);
+            .catch(err => {
+                showNotification(err.message);
                 resumeScannerAfterDelay();
-            })
-            .getProductByBarcode(barcode);
+            });
     }
 
     function resumeScannerAfterDelay() {
@@ -507,8 +531,9 @@
         const button = document.getElementById('btn-complete-transaction');
         startLoading(button);
 
-        google.script.run
-            .withSuccessHandler(response => {
+        // Panggil API lewat fetch
+        callAPI('processTransaction', { cart: cart, studentId: currentStudent.id })
+            .then(response => {
                 stopLoading(button, 'Selesaikan Transaksi');
                 if(response.success){
                     showNotification(response.message, false);
@@ -517,11 +542,10 @@
                     showNotification(response.message);
                 }
             })
-            .withFailureHandler(err => {
+            .catch(err => {
                 stopLoading(button, 'Selesaikan Transaksi');
-                showNotification("Gagal memproses transaksi: " + err.message);
-            })
-            .processTransaction(cart, currentStudent.id);
+                showNotification(err.message);
+            });
     }
     
     function resetKasir() {
