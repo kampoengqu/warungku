@@ -177,7 +177,7 @@
 <script>
     // --- KONFIGURASI API ---
     // GANTI dengan URL Web App Apps Script Anda (yang diakhiri /exec)
-    const API_URL = "https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEStCNUglng8YpUXdfYxGGlSj/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEstCNUglng8YpUXdfYxGGlSj/exec";
 
     // --- STATE & DATABASE LOKAL ---
     let localStudents = []; // Cache semua data santri
@@ -599,7 +599,6 @@
         button.disabled = true;
         button.innerHTML = '<span class="animate-spin inline-block mr-2 border-2 border-white border-t-transparent rounded-full w-4 h-4"></span> Memproses...';
 
-        // Kita TETAP harus memanggil API saat menyimpan transaksi (karena ini menulis ke Database)
         callAPI('processTransaction', { cart: cart, studentId: currentStudent.id })
             .then(response => {
                 button.disabled = false;
@@ -615,7 +614,11 @@
                     
                     // Update data di array lokal utama
                     const studentIndex = localStudents.findIndex(s => s.id === currentStudent.id);
-                    if(studentIndex > -1) localStudents[studentIndex] = currentStudent;
+                    if(studentIndex > -1) {
+                        localStudents[studentIndex] = currentStudent;
+                        // UPDATE KE CACHE AGAR DATA TERBARU TERSIMPAN DI HP
+                        localStorage.setItem('kantin_students', JSON.stringify(localStudents));
+                    }
 
                     resetKasir();
                 } else {
