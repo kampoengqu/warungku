@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pencarian Belanja Santri</title>
+    <!-- Memuat Tailwind CSS untuk styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Style tambahan untuk tampilan yang lebih baik */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-4xl mx-auto p-6 md:p-8 bg-white rounded-xl shadow-lg">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Cek Histori Belanja Santri</h1>
+            <p class="text-gray-500 mt-2">Masukkan ID atau Nama Santri untuk melihat detail pembelanjaan.</p>
+        </div>
+
+        <!-- Form Pencarian -->
+        <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <input type="text" id="searchInput" placeholder="Ketik ID atau Nama Santri..." class="flex-grow w-full px-4 py-3 text-gray-700 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+            <button id="searchButton" class="w-full sm:w-auto bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 shadow">
+                Cari
+            </button>
+        </div>
+
+        <!-- Area Hasil Pencarian -->
+        <div id="resultsContainer">
+            <!-- Loader akan muncul di sini -->
+            <div id="loader" class="hidden justify-center items-center py-8">
+                <div class="loader"></div>
+            </div>
+            <!-- Pesan error atau not found akan muncul di sini -->
+            <div id="message" class="text-center py-8 text-gray-500"></div>
+            <!-- Tabel hasil akan muncul di sini -->
+            <div id="tableContainer" class="overflow-x-auto"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- KONFIGURASI ---
+        // GANTI URL DI BAWAH INI DENGAN URL APLIKASI WEB DARI GOOGLE APPS SCRIPT ANDA
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEStCNUglng8YpUXdfYxGGlSj/exec';
+        // --- AKHIR KONFIGURASI ---
+
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const loader = document.getElementById('loader');
+        const message = document.getElementById('message');
+        const tableContainer = document.getElementById('tableContainer');
+
+        // Cache data untuk performa
+        let allData = [];
+
+        // Fungsi untuk mengambil data saat pertama kali dimuat
+        const initialFetch = async () => {
+            if (APPS_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEStCNUglng8YpUXdfYxGGlSj/exec') {
+                message.textContent = 'Konfigurasi belum selesai. Harap masukkan URL Web App dari Google Apps Script.';
+                return;
+            }
+            loader.classList.remove('hidden');
+            loader.classList.add('flex');
+            message.textContent = 'Sedang memuat data awal...';
+
+            try {
+                // Perlu menambahkan parameter agar Apps Script mengirim JSON, bukan HTML index
+                const response = await fetch(APPS_SCRIPT_URL + '?action=getdata');
+                if (!response.ok) {
+                    throw new Error(`Gagal mengambil data (status: ${response.status}).`);
+                }
+                allData = await response.json();
+                message.textContent = 'Selamat datang! Masukkan ID atau Nama Santri untuk melihat histori belanja.';
+            } catch (error) {
+                console.error('Detail Kesalahan:', error);
+                message.textContent = 'Gagal memuat data awal. Pastikan URL Apps Script benar dan sheet dapat diakses.';
+            } finally {
+                loader.classList.add('hidden');
+                loader.classList.remove('flex');
+            }
+        };
+
+        // Fungsi untuk mencari dan menampilkan data dari cache
+        const searchData = () => {
+            const query = searchInput.value.trim().toLowerCase();
+            if (!query) {
+                message.textContent = 'Silakan masukkan ID atau nama untuk memulai pencarian.';
+                tableContainer.innerHTML = '';
+                return;
+            }
+
+            if (allData.length === 0) {
+                message.textContent = 'Data belum siap atau gagal dimuat. Coba muat ulang halaman.';
+                return;
+            }
+
+            const filteredData = allData.filter(row => {
+                // Pastikan properti ada sebelum memanggil toLowerCase
+                const idSantri = row['ID_Santri'] ? String(row['ID_Santri']).toLowerCase() : '';
+                const namaSantri = row['Nama_Santri'] ? String(row['Nama_Santri']).toLowerCase() : '';
+                return idSantri.includes(query) || namaSantri.includes(query);
+            });
+
+            displayResults(filteredData);
+        };
+        
+        const displayResults = (data) => {
+            tableContainer.innerHTML = ''; // Bersihkan hasil sebelumnya
+            message.textContent = '';
+            
+            if (data.length === 0) {
+                message.textContent = 'Data tidak ditemukan untuk ID atau nama tersebut.';
+                return;
+            }
+            
+            let totalPengeluaran = 0;
+
+            const table = document.createElement('table');
+            table.className = 'min-w-full bg-white border border-gray-200 rounded-lg';
+            
+            table.innerHTML = `
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Waktu</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detail Belanja</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Belanja</th>
+                    </tr>
+                </thead>
+            `;
+
+            const tbody = document.createElement('tbody');
+            tbody.className = 'divide-y divide-gray-200';
+            
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                const total = parseInt(row['Total_Belanja'], 10) || 0;
+                totalPengeluaran += total;
+
+                // --- PERUBAHAN DIMULAI DI SINI ---
+                // Fungsi untuk memformat tanggal
+                const formatWaktu = (waktuISO) => {
+                    if (!waktuISO) return '';
+                    try {
+                        const tanggal = new Date(waktuISO);
+                        // Cek apakah tanggal valid
+                        if (isNaN(tanggal)) return waktuISO;
+
+                        // Opsi untuk format Indonesia
+                        const options = {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: false // Gunakan format 24 jam
+                        };
+                        // Ganti titik dengan : dan hapus pemisah lain yang tidak perlu
+                        return tanggal.toLocaleString('id-ID', options).replace(/\./g, ':').replace(',', '');
+                    } catch (e) {
+                        console.error("Gagal memformat waktu:", waktuISO);
+                        return waktuISO; // Kembalikan nilai asli jika ada error
+                    }
+                };
+
+                const waktuTerformat = formatWaktu(row['Timestamp']);
+                // --- AKHIR PERUBAHAN ---
+
+                let detailHtml;
+                try {
+                    // Coba parse JSON, bahkan jika itu string biasa
+                    const belanjaItems = JSON.parse(row['Detail_Belanja_JSON']);
+                    if (Array.isArray(belanjaItems) && belanjaItems.length > 0) {
+                        detailHtml = '<ul class="list-disc list-inside space-y-1">';
+                        belanjaItems.forEach(item => {
+                            const nama = item.nama || 'Nama barang tidak ada';
+                            const jumlah = item.jumlah || 1;
+                            const harga = item.harga ? parseInt(item.harga, 10) : 0;
+                            detailHtml += `<li>${nama} (x${jumlah}) <span class="text-xs text-gray-500">- @ Rp ${harga.toLocaleString('id-ID')}</span></li>`;
+                        });
+                        detailHtml += '</ul>';
+                    } else {
+                        detailHtml = row['Detail_Belanja_JSON'] || '';
+                    }
+                } catch (e) {
+                    detailHtml = row['Detail_Belanja_JSON'] || '';
+                }
+                
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 align-top">${waktuTerformat}</td>
+                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-800 font-medium align-top">${detailHtml}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 align-top">Rp ${total.toLocaleString('id-ID')}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            table.appendChild(tbody);
+            tableContainer.appendChild(table);
+
+            const totalElement = document.createElement('div');
+            totalElement.className = 'mt-4 text-right pr-2';
+            totalElement.innerHTML = `
+                <p class="text-gray-600">Total Pengeluaran: 
+                    <span class="font-bold text-lg text-blue-700">Rp ${totalPengeluaran.toLocaleString('id-ID')}</span>
+                </p>
+                <p class="text-xs text-gray-400 mt-1">
+                    Atas nama: <span class="font-semibold">${data[0]['Nama_Santri']}</span> (ID: ${data[0]['ID_Santri']})
+                </p>
+            `;
+            tableContainer.appendChild(totalElement);
+        };
+
+        searchButton.addEventListener('click', searchData);
+        searchInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                searchData();
+            }
+        });
+        
+        // Panggil initialFetch saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', initialFetch);
+
+    </script>
+</body>
+</html>
