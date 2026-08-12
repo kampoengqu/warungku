@@ -2,273 +2,134 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pencarian Belanja Santri</title>
-    <!-- Memuat Tailwind CSS untuk styling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cek Histori Belanja</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Style tambahan untuk tampilan yang lebih baik */
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        /* Custom scrollbar untuk dropdown */
+        body { font-family: 'Inter', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+<body class="bg-gray-50 text-gray-800 min-h-screen p-4">
+    <!-- Loader Satset -->
+    <div id="initial-loader" class="fixed inset-0 bg-white/95 z-[100] flex flex-col items-center justify-center transition-opacity duration-300">
+        <div class="animate-spin rounded-full h-14 w-14 border-4 border-gray-200 border-t-blue-600 mb-4"></div>
+        <h2 class="text-xl font-bold text-gray-800 mb-1">Memuat Histori...</h2>
+        <p class="text-gray-500 text-sm">Menarik data dari server</p>
+    </div>
 
-    <div class="w-full max-w-4xl mx-auto p-6 md:p-8 bg-white rounded-xl shadow-lg">
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-gray-800">Cek Histori Belanja Santri</h1>
-            <p class="text-gray-500 mt-2">Masukkan ID atau Nama Santri untuk melihat detail pembelanjaan.</p>
+    <div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow-md mt-4">
+        <h1 class="text-2xl font-bold text-center text-blue-600 mb-2">Cek Histori Belanja Santri</h1>
+        <p class="text-center text-gray-500 mb-6 text-sm">Masukkan ID atau Nama Santri untuk melihat detail pembelanjaan.</p>
+
+        <div class="mb-6 relative">
+            <div class="flex space-x-2">
+                <div class="relative w-full">
+                    <input type="text" id="searchInput" autocomplete="off" oninput="handleSearchAutocomplete()" onfocus="handleSearchAutocomplete()" class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" placeholder="Ketik ID atau Nama Santri...">
+                    <!-- Dropdown Autocomplete -->
+                    <ul id="autocomplete-list" class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto hidden custom-scrollbar mt-1"></ul>
+                </div>
+                <button onclick="searchHistory()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold shadow-md transition-colors">Cari</button>
+            </div>
         </div>
 
-        <!-- Form Pencarian -->
-        <div class="flex flex-col sm:flex-row gap-3 mb-6 relative">
-            <div class="relative flex-grow w-full">
-                <input type="text" id="searchInput" autocomplete="off" placeholder="Ketik ID atau Nama Santri..." class="w-full px-4 py-3 text-gray-700 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                <!-- Dropdown Autocomplete -->
-                <ul id="autocomplete-list" class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto hidden custom-scrollbar mt-1"></ul>
-            </div>
-            <button id="searchButton" class="w-full sm:w-auto bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 shadow">
-                Cari
-            </button>
-        </div>
+        <div id="error-message" class="hidden text-center p-4 bg-red-50 text-red-600 border border-red-200 rounded-lg mb-4 font-medium"></div>
 
-        <!-- Area Hasil Pencarian -->
-        <div id="resultsContainer">
-            <!-- Loader akan muncul di sini -->
-            <div id="loader" class="hidden justify-center items-center py-8">
-                <div class="loader"></div>
-            </div>
-            <!-- Pesan error atau not found akan muncul di sini -->
-            <div id="message" class="text-center py-8 text-gray-500"></div>
-            <!-- Tabel hasil akan muncul di sini -->
-            <div id="tableContainer" class="overflow-x-auto"></div>
+        <div id="results-container" class="hidden space-y-4">
+            <!-- Hasil pencarian akan muncul di sini (Otomatis dari yang terbaru) -->
         </div>
     </div>
 
     <script>
-        // --- KONFIGURASI ---
-        // GANTI URL DI BAWAH INI DENGAN URL APLIKASI WEB DARI GOOGLE APPS SCRIPT ANDA
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEStCNUglng8YpUXdfYxGGlSj/exec';
-        // --- AKHIR KONFIGURASI ---
+        // --- KONFIGURASI URL (WAJIB DIGANTI!) ---
+        // Masukkan URL dari Terapkan > Kelola Deployment > Versi Baru di sini:
+        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEStCNUglng8YpUXdfYxGGlSj/exec";
 
-        const searchInput = document.getElementById('searchInput');
-        const searchButton = document.getElementById('searchButton');
-        const resultsContainer = document.getElementById('resultsContainer');
-        const loader = document.getElementById('loader');
-        const message = document.getElementById('message');
-        const tableContainer = document.getElementById('tableContainer');
+        let allHistoryData = [];
 
-        // Cache data untuk performa
-        let allData = [];
-        let uniqueStudents = []; // Cache nama/id santri unik untuk autocomplete
-
-        // Fungsi untuk mengambil data saat pertama kali dimuat
-        const initialFetch = async () => {
-            if (APPS_SCRIPT_URL === 'GANTI_DENGAN_URL_WEB_APP_ANDA') {
-                message.textContent = 'Konfigurasi belum selesai. Harap masukkan URL Web App dari Google Apps Script.';
+        async function initApp() {
+            if (APPS_SCRIPT_URL.includes("GANTI_DENGAN")) {
+                showError("Konfigurasi Error: Anda belum menempelkan URL Web App Anda di dalam file cekhistori/index.html");
                 return;
             }
-            loader.classList.remove('hidden');
-            loader.classList.add('flex');
-            message.textContent = 'Sedang memuat data awal...';
 
+            // 1. Coba baca dari memori (Cache) dulu agar SATSET
+            const cachedData = localStorage.getItem('kantin_history');
+            if (cachedData) {
+                allHistoryData = JSON.parse(cachedData);
+                hideLoader();
+                fetchDataBackground(); // Update data diam-diam di latar belakang
+            } else {
+                await fetchDataForeground(); // Jika memori kosong, tunggu loading
+            }
+        }
+
+        async function fetchDataForeground() {
             try {
-                // Perlu menambahkan parameter agar Apps Script mengirim JSON, bukan HTML index
                 const response = await fetch(APPS_SCRIPT_URL + '?action=getdata');
-                if (!response.ok) {
-                    throw new Error(`Gagal mengambil data (status: ${response.status}).`);
-                }
-                allData = await response.json();
+                if (!response.ok) throw new Error("Gagal terhubung ke server.");
+                const data = await response.json();
                 
-                // Ekstrak data unik untuk autocomplete (berdasarkan histori belanja)
-                const studentMap = new Map();
-                allData.forEach(row => {
-                    if(row['ID_Santri'] && row['Nama_Santri']) {
-                        studentMap.set(String(row['ID_Santri']), String(row['Nama_Santri']));
-                    }
-                });
-                uniqueStudents = Array.from(studentMap, ([id, name]) => ({id, name}));
-
-                message.textContent = 'Selamat datang! Masukkan ID atau Nama Santri untuk melihat histori belanja.';
-            } catch (error) {
-                console.error('Detail Kesalahan:', error);
-                message.textContent = 'Gagal memuat data awal. Pastikan URL Apps Script benar dan sheet dapat diakses.';
-            } finally {
-                loader.classList.add('hidden');
-                loader.classList.remove('flex');
+                // Balik urutan array agar transaksi terbaru berada di atas!
+                allHistoryData = data.reverse();
+                localStorage.setItem('kantin_history', JSON.stringify(allHistoryData));
+                hideLoader();
+            } catch (err) {
+                showError("Gagal memuat data awal. Pastikan URL Apps Script benar dan tidak ada salah ketik.");
             }
-        };
+        }
 
-        // Fungsi untuk mencari dan menampilkan data dari cache
-        const searchData = () => {
-            const query = searchInput.value.trim().toLowerCase();
-            const listEl = document.getElementById('autocomplete-list');
-            if(listEl) listEl.classList.add('hidden'); // Sembunyikan dropdown saat mencari
-
-            if (!query) {
-                message.textContent = 'Silakan masukkan ID atau nama untuk memulai pencarian.';
-                tableContainer.innerHTML = '';
-                return;
+        async function fetchDataBackground() {
+            try {
+                const response = await fetch(APPS_SCRIPT_URL + '?action=getdata');
+                const data = await response.json();
+                allHistoryData = data.reverse();
+                localStorage.setItem('kantin_history', JSON.stringify(allHistoryData));
+            } catch (err) {
+                console.error("Gagal update background:", err);
             }
+        }
 
-            if (allData.length === 0) {
-                message.textContent = 'Data belum siap atau gagal dimuat. Coba muat ulang halaman.';
-                return;
-            }
+        function hideLoader() {
+            const loader = document.getElementById('initial-loader');
+            loader.style.opacity = '0';
+            setTimeout(() => loader.classList.add('hidden'), 300);
+        }
 
-            const filteredData = allData.filter(row => {
-                // Pastikan properti ada sebelum memanggil toLowerCase
-                const idSantri = row['ID_Santri'] ? String(row['ID_Santri']).toLowerCase() : '';
-                const namaSantri = row['Nama_Santri'] ? String(row['Nama_Santri']).toLowerCase() : '';
-                return idSantri.includes(query) || namaSantri.includes(query);
-            });
+        function showError(msg) {
+            document.getElementById('initial-loader').classList.add('hidden');
+            const errEl = document.getElementById('error-message');
+            errEl.textContent = msg;
+            errEl.classList.remove('hidden');
+        }
 
-            displayResults(filteredData);
-        };
-        
-        const displayResults = (data) => {
-            tableContainer.innerHTML = ''; // Bersihkan hasil sebelumnya
-            message.textContent = '';
-            
-            if (data.length === 0) {
-                message.textContent = 'Data tidak ditemukan untuk ID atau nama tersebut.';
-                return;
-            }
-            
-            let totalPengeluaran = 0;
-
-            const table = document.createElement('table');
-            table.className = 'min-w-full bg-white border border-gray-200 rounded-lg';
-            
-            table.innerHTML = `
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Waktu</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detail Belanja</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Belanja</th>
-                    </tr>
-                </thead>
-            `;
-
-            const tbody = document.createElement('tbody');
-            tbody.className = 'divide-y divide-gray-200';
-            
-            data.forEach(row => {
-                const tr = document.createElement('tr');
-                const total = parseInt(row['Total_Belanja'], 10) || 0;
-                totalPengeluaran += total;
-
-                // --- PERUBAHAN DIMULAI DI SINI ---
-                // Fungsi untuk memformat tanggal
-                const formatWaktu = (waktuISO) => {
-                    if (!waktuISO) return '';
-                    try {
-                        const tanggal = new Date(waktuISO);
-                        // Cek apakah tanggal valid
-                        if (isNaN(tanggal)) return waktuISO;
-
-                        // Opsi untuk format Indonesia
-                        const options = {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                            hour12: false // Gunakan format 24 jam
-                        };
-                        // Ganti titik dengan : dan hapus pemisah lain yang tidak perlu
-                        return tanggal.toLocaleString('id-ID', options).replace(/\./g, ':').replace(',', '');
-                    } catch (e) {
-                        console.error("Gagal memformat waktu:", waktuISO);
-                        return waktuISO; // Kembalikan nilai asli jika ada error
-                    }
-                };
-
-                const waktuTerformat = formatWaktu(row['Timestamp']);
-                // --- AKHIR PERUBAHAN ---
-
-                let detailHtml;
-                try {
-                    // Coba parse JSON, bahkan jika itu string biasa
-                    const belanjaItems = JSON.parse(row['Detail_Belanja_JSON']);
-                    if (Array.isArray(belanjaItems) && belanjaItems.length > 0) {
-                        detailHtml = '<ul class="list-disc list-inside space-y-1">';
-                        belanjaItems.forEach(item => {
-                            const nama = item.nama || 'Nama barang tidak ada';
-                            const jumlah = item.jumlah || 1;
-                            const harga = item.harga ? parseInt(item.harga, 10) : 0;
-                            detailHtml += `<li>${nama} (x${jumlah}) <span class="text-xs text-gray-500">- @ Rp ${harga.toLocaleString('id-ID')}</span></li>`;
-                        });
-                        detailHtml += '</ul>';
-                    } else {
-                        detailHtml = row['Detail_Belanja_JSON'] || '';
-                    }
-                } catch (e) {
-                    detailHtml = row['Detail_Belanja_JSON'] || '';
-                }
-                
-                tr.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 align-top">${waktuTerformat}</td>
-                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-800 font-medium align-top">${detailHtml}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 align-top">Rp ${total.toLocaleString('id-ID')}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            table.appendChild(tbody);
-            tableContainer.appendChild(table);
-
-            const totalElement = document.createElement('div');
-            totalElement.className = 'mt-4 text-right pr-2';
-            totalElement.innerHTML = `
-                <p class="text-gray-600">Total Pengeluaran: 
-                    <span class="font-bold text-lg text-blue-700">Rp ${totalPengeluaran.toLocaleString('id-ID')}</span>
-                </p>
-                <p class="text-xs text-gray-400 mt-1">
-                    Atas nama: <span class="font-semibold">${data[0]['Nama_Santri']}</span> (ID: ${data[0]['ID_Santri']})
-                </p>
-            `;
-            tableContainer.appendChild(totalElement);
-        };
-
-        // --- FITUR AUTOCOMPLETE ---
-        searchInput.addEventListener('input', function() {
-            const query = this.value.trim().toLowerCase();
+        // --- AUTOCOMPLETE CERDAS ---
+        function handleSearchAutocomplete() {
+            const input = document.getElementById('searchInput').value.toLowerCase().trim();
             const listEl = document.getElementById('autocomplete-list');
             listEl.innerHTML = '';
 
-            if (!query) {
+            if (!input) {
                 listEl.classList.add('hidden');
                 return;
             }
 
-            // Filter dari data uniqueStudents
-            const matches = uniqueStudents.filter(s => 
-                s.id.toLowerCase().includes(query) || s.name.toLowerCase().includes(query)
-            ).slice(0, 10); // Batasi 10 hasil maksimal
+            // Ekstrak daftar nama/ID unik dari seluruh histori
+            const uniqueSantri = [];
+            const seenIds = new Set();
+            
+            for (const row of allHistoryData) {
+                if (row.ID_Santri && !seenIds.has(row.ID_Santri)) {
+                    seenIds.add(row.ID_Santri);
+                    uniqueSantri.push({ id: String(row.ID_Santri), name: String(row.Nama_Santri) });
+                }
+            }
+
+            const matches = uniqueSantri.filter(s => 
+                s.id.toLowerCase().includes(input) || s.name.toLowerCase().includes(input)
+            ).slice(0, 8); // Tampilkan 8 saran terbaik
 
             if (matches.length > 0) {
                 matches.forEach(student => {
@@ -276,9 +137,9 @@
                     li.className = 'px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0';
                     li.innerHTML = `<div class="font-semibold text-gray-800">${student.name}</div><div class="text-xs text-gray-500">ID: ${student.id}</div>`;
                     li.onclick = () => {
-                        searchInput.value = student.id; 
+                        document.getElementById('searchInput').value = student.id;
                         listEl.classList.add('hidden');
-                        searchData(); // Langsung cari otomatis ketika diklik!
+                        searchHistory(); // Langsung eksekusi pencarian
                     };
                     listEl.appendChild(li);
                 });
@@ -286,27 +147,88 @@
             } else {
                 listEl.classList.add('hidden');
             }
-        });
+        }
 
-        // Sembunyikan dropdown jika klik di luar area input
+        // Tutup dropdown jika area lain diklik
         document.addEventListener('click', function(e) {
-            const listEl = document.getElementById('autocomplete-list');
-            if (listEl && !e.target.closest('#searchInput')) {
-                listEl.classList.add('hidden');
+            if (!e.target.closest('#searchInput')) {
+                document.getElementById('autocomplete-list').classList.add('hidden');
             }
         });
-        // --- AKHIR FITUR AUTOCOMPLETE ---
 
-        searchButton.addEventListener('click', searchData);
-        searchInput.addEventListener('keyup', (event) => {
-            if (event.key === 'Enter') {
-                searchData();
+        // --- PENCARIAN & RENDER HASIL ---
+        function searchHistory() {
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            const resultsContainer = document.getElementById('results-container');
+            const errEl = document.getElementById('error-message');
+            
+            errEl.classList.add('hidden');
+            resultsContainer.innerHTML = '';
+            resultsContainer.classList.remove('hidden');
+
+            if (!query) {
+                showError("Silakan ketikkan ID atau Nama Santri terlebih dahulu.");
+                return;
             }
-        });
-        
-        // Panggil initialFetch saat halaman dimuat
-        document.addEventListener('DOMContentLoaded', initialFetch);
 
+            // Cari histori yang cocok
+            const results = allHistoryData.filter(row => 
+                String(row.ID_Santri).toLowerCase() === query || 
+                String(row.Nama_Santri).toLowerCase() === query
+            );
+
+            if (results.length === 0) {
+                resultsContainer.innerHTML = `<div class="text-center p-8 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-gray-500">Tidak ada histori belanja untuk santri tersebut.</div>`;
+                return;
+            }
+
+            // Render Kartu Histori yang rapi
+            results.forEach(row => {
+                const card = document.createElement('div');
+                card.className = 'bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow';
+                
+                // Format Tanggal jadi rapi (Contoh: 11 Agustus 2026)
+                const dateObj = new Date(row.Timestamp);
+                const dateStr = dateObj.toLocaleDateString('id-ID', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute:'2-digit' });
+
+                // Ubah data JSON belanjaan menjadi list HTML
+                let detailHTML = '';
+                try {
+                    const details = JSON.parse(row.Detail_Belanja_JSON);
+                    detailHTML = `<ul class="mt-3 space-y-2 bg-gray-50 p-4 rounded-lg border border-gray-100">`;
+                    details.forEach(item => {
+                        detailHTML += `<li class="flex justify-between text-sm text-gray-700">
+                                          <span><strong class="text-gray-900">${item.jumlah}x</strong> ${item.nama}</span> 
+                                          <span class="font-medium text-gray-800">Rp ${(item.harga * item.jumlah).toLocaleString('id-ID')}</span>
+                                       </li>`;
+                    });
+                    detailHTML += `</ul>`;
+                } catch(e) {
+                    detailHTML = `<p class="text-sm text-red-400 italic mt-2">Detail barang tidak dapat dibaca.</p>`;
+                }
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start border-b border-gray-100 pb-3 mb-3">
+                        <div>
+                            <div class="font-bold text-gray-800 text-lg">${row.Nama_Santri}</div>
+                            <div class="text-xs text-gray-500 mt-1"><span class="bg-gray-100 px-2 py-1 rounded">ID: ${row.ID_Santri}</span> &nbsp;|&nbsp; 🕒 ${dateStr}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1">Total Belanja</div>
+                            <div class="font-bold text-blue-600 text-xl">Rp ${Number(row.Total_Belanja).toLocaleString('id-ID')}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-4">Rincian Barang:</div>
+                        ${detailHTML}
+                    </div>
+                `;
+                resultsContainer.appendChild(card);
+            });
+        }
+
+        // Eksekusi initApp saat layar siap
+        document.addEventListener('DOMContentLoaded', initApp);
     </script>
 </body>
 </html>
