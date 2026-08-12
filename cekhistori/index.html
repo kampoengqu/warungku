@@ -13,16 +13,16 @@
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen p-4">
-    <!-- Loader Satset -->
-    <div id="initial-loader" class="fixed inset-0 bg-white/95 z-[100] flex flex-col items-center justify-center transition-opacity duration-300">
+    <!-- Loader -->
+    <div id="initial-loader" class="hidden fixed inset-0 bg-white/95 z-[100] flex-col items-center justify-center transition-opacity duration-300">
         <div class="animate-spin rounded-full h-14 w-14 border-4 border-gray-200 border-t-blue-600 mb-4"></div>
-        <h2 class="text-xl font-bold text-gray-800 mb-1">Memuat Histori...</h2>
-        <p class="text-gray-500 text-sm">Menarik data dari server</p>
+        <h2 class="text-xl font-bold text-gray-800 mb-1">Mencari Histori...</h2>
+        <p class="text-gray-500 text-sm">Harap tunggu sebentar</p>
     </div>
 
     <div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow-md mt-4">
         <h1 class="text-2xl font-bold text-center text-blue-600 mb-2">Cek Histori Belanja Santri</h1>
-        <p class="text-center text-gray-500 mb-6 text-sm">Masukkan ID atau Nama Santri untuk melihat detail pembelanjaan.</p>
+        <p class="text-center text-gray-500 mb-6 text-sm">Masukkan ID atau Nama Santri untuk melihat 30 transaksi terakhirnya.</p>
 
         <div class="mb-6 relative">
             <div class="flex space-x-2">
@@ -38,96 +38,36 @@
         <div id="error-message" class="hidden text-center p-4 bg-red-50 text-red-600 border border-red-200 rounded-lg mb-4 font-medium"></div>
 
         <div id="results-container" class="hidden space-y-4">
-            <!-- Hasil pencarian akan muncul di sini (Otomatis dari yang terbaru) -->
+            <!-- Hasil pencarian akan muncul di sini -->
         </div>
     </div>
 
     <script>
-        // --- KONFIGURASI URL (WAJIB DIGANTI!) ---
-        // Masukkan URL dari Terapkan > Kelola Deployment > Versi Baru di sini:
+        // --- URL WEB APP ---
         const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7k_KlFE01YtnrZdX038uFuqlVO53WttS-LqedpaiAEStCNUglng8YpUXdfYxGGlSj/exec";
 
-        let allHistoryData = [];
+        let localStudents = [];
 
-        async function initApp() {
-            if (APPS_SCRIPT_URL.includes("GANTI_DENGAN")) {
-                showError("Konfigurasi Error: Anda belum menempelkan URL Web App Anda di dalam file cekhistori/index.html");
-                return;
-            }
-
-            // 1. Coba baca dari memori (Cache) dulu agar SATSET
-            const cachedData = localStorage.getItem('kantin_history');
+        // Muat data santri dari cache aplikasi kasir untuk autocomplete
+        function initApp() {
+            const cachedData = localStorage.getItem('kantin_students');
             if (cachedData) {
-                allHistoryData = JSON.parse(cachedData);
-                hideLoader();
-                fetchDataBackground(); // Update data diam-diam di latar belakang
-            } else {
-                await fetchDataForeground(); // Jika memori kosong, tunggu loading
+                localStudents = JSON.parse(cachedData);
             }
         }
 
-        async function fetchDataForeground() {
-            try {
-                const response = await fetch(APPS_SCRIPT_URL + '?action=getdata');
-                if (!response.ok) throw new Error("Gagal terhubung ke server.");
-                const data = await response.json();
-                
-                // Balik urutan array agar transaksi terbaru berada di atas!
-                allHistoryData = data.reverse();
-                localStorage.setItem('kantin_history', JSON.stringify(allHistoryData));
-                hideLoader();
-            } catch (err) {
-                showError("Gagal memuat data awal. Pastikan URL Apps Script benar dan tidak ada salah ketik.");
-            }
-        }
-
-        async function fetchDataBackground() {
-            try {
-                const response = await fetch(APPS_SCRIPT_URL + '?action=getdata');
-                const data = await response.json();
-                allHistoryData = data.reverse();
-                localStorage.setItem('kantin_history', JSON.stringify(allHistoryData));
-            } catch (err) {
-                console.error("Gagal update background:", err);
-            }
-        }
-
-        function hideLoader() {
-            const loader = document.getElementById('initial-loader');
-            loader.style.opacity = '0';
-            setTimeout(() => loader.classList.add('hidden'), 300);
-        }
-
-        function showError(msg) {
-            document.getElementById('initial-loader').classList.add('hidden');
-            const errEl = document.getElementById('error-message');
-            errEl.textContent = msg;
-            errEl.classList.remove('hidden');
-        }
-
-        // --- AUTOCOMPLETE CERDAS ---
+        // --- AUTOCOMPLETE CERDAS DARI CACHE KASIR ---
         function handleSearchAutocomplete() {
             const input = document.getElementById('searchInput').value.toLowerCase().trim();
             const listEl = document.getElementById('autocomplete-list');
             listEl.innerHTML = '';
 
-            if (!input) {
+            if (!input || localStudents.length === 0) {
                 listEl.classList.add('hidden');
                 return;
             }
 
-            // Ekstrak daftar nama/ID unik dari seluruh histori
-            const uniqueSantri = [];
-            const seenIds = new Set();
-            
-            for (const row of allHistoryData) {
-                if (row.ID_Santri && !seenIds.has(row.ID_Santri)) {
-                    seenIds.add(row.ID_Santri);
-                    uniqueSantri.push({ id: String(row.ID_Santri), name: String(row.Nama_Santri) });
-                }
-            }
-
-            const matches = uniqueSantri.filter(s => 
+            const matches = localStudents.filter(s => 
                 s.id.toLowerCase().includes(input) || s.name.toLowerCase().includes(input)
             ).slice(0, 8); // Tampilkan 8 saran terbaik
 
@@ -156,42 +96,80 @@
             }
         });
 
-        // --- PENCARIAN & RENDER HASIL ---
-        function searchHistory() {
-            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+        // --- PENCARIAN KE SERVER ---
+        async function searchHistory() {
+            const query = document.getElementById('searchInput').value.trim();
             const resultsContainer = document.getElementById('results-container');
             const errEl = document.getElementById('error-message');
+            const loader = document.getElementById('initial-loader');
             
             errEl.classList.add('hidden');
             resultsContainer.innerHTML = '';
-            resultsContainer.classList.remove('hidden');
+            resultsContainer.classList.add('hidden');
 
             if (!query) {
                 showError("Silakan ketikkan ID atau Nama Santri terlebih dahulu.");
                 return;
             }
 
-            // Cari histori yang cocok
-            const results = allHistoryData.filter(row => 
-                String(row.ID_Santri).toLowerCase() === query || 
-                String(row.Nama_Santri).toLowerCase() === query
+            // Cari ID asli dari input (kalau user mengetik nama)
+            let studentId = query;
+            const foundStudent = localStudents.find(s => 
+                s.name.toLowerCase() === query.toLowerCase() || 
+                s.id.toLowerCase() === query.toLowerCase()
             );
+            
+            if (foundStudent) {
+                studentId = foundStudent.id;
+                document.getElementById('searchInput').value = studentId; // Ubah input jadi ID agar rapi
+            }
+
+            // Tampilkan loading
+            loader.style.display = 'flex';
+            loader.classList.remove('hidden');
+
+            try {
+                const response = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: 'getHistoriSantri', studentId: studentId })
+                });
+                
+                const data = await response.json();
+                loader.style.display = 'none';
+                loader.classList.add('hidden');
+
+                if (!data.success) {
+                    showError("Terjadi kesalahan: " + data.error);
+                    return;
+                }
+
+                renderResults(data.data, studentId, foundStudent ? foundStudent.name : studentId);
+
+            } catch (err) {
+                loader.style.display = 'none';
+                loader.classList.add('hidden');
+                showError("Gagal terhubung ke server. Pastikan URL benar.");
+            }
+        }
+
+        function renderResults(results, studentId, studentName) {
+            const resultsContainer = document.getElementById('results-container');
+            resultsContainer.classList.remove('hidden');
 
             if (results.length === 0) {
-                resultsContainer.innerHTML = `<div class="text-center p-8 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-gray-500">Tidak ada histori belanja untuk santri tersebut.</div>`;
+                resultsContainer.innerHTML = `<div class="text-center p-8 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-gray-500">Tidak ada histori belanja untuk santri ini.</div>`;
                 return;
             }
 
-            // Render Kartu Histori yang rapi
             results.forEach(row => {
                 const card = document.createElement('div');
                 card.className = 'bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow';
                 
-                // Format Tanggal jadi rapi (Contoh: 11 Agustus 2026)
+                // Format Tanggal
                 const dateObj = new Date(row.Timestamp);
                 const dateStr = dateObj.toLocaleDateString('id-ID', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute:'2-digit' });
 
-                // Ubah data JSON belanjaan menjadi list HTML
                 let detailHTML = '';
                 try {
                     const details = JSON.parse(row.Detail_Belanja_JSON);
@@ -225,6 +203,12 @@
                 `;
                 resultsContainer.appendChild(card);
             });
+        }
+
+        function showError(msg) {
+            const errEl = document.getElementById('error-message');
+            errEl.textContent = msg;
+            errEl.classList.remove('hidden');
         }
 
         // Eksekusi initApp saat layar siap
