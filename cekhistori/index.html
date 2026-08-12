@@ -96,7 +96,7 @@
             }
         });
 
-        // --- PENCARIAN KE SERVER ---
+        // --- PENCARIAN & CACHE PER-SANTRI ---
         async function searchHistory() {
             const query = document.getElementById('searchInput').value.trim();
             const resultsContainer = document.getElementById('results-container');
@@ -112,7 +112,7 @@
                 return;
             }
 
-            // Cari ID asli dari input (kalau user mengetik nama)
+            // Cari ID asli dari input
             let studentId = query;
             const foundStudent = localStudents.find(s => 
                 s.name.toLowerCase() === query.toLowerCase() || 
@@ -121,13 +121,28 @@
             
             if (foundStudent) {
                 studentId = foundStudent.id;
-                document.getElementById('searchInput').value = studentId; // Ubah input jadi ID agar rapi
+                document.getElementById('searchInput').value = studentId;
             }
 
-            // Tampilkan loading
-            loader.style.display = 'flex';
-            loader.classList.remove('hidden');
+            const studentName = foundStudent ? foundStudent.name : studentId;
+            const cacheKey = 'histori_jajan_' + studentId;
+            const cachedHistori = localStorage.getItem(cacheKey);
 
+            // LOGIKA SATSET: Jika data sudah ada di memori HP, langsung tampilkan 0 detik!
+            if (cachedHistori) {
+                renderResults(JSON.parse(cachedHistori), studentId, studentName);
+                // Update diam-diam di latar belakang agar data selalu fresh untuk pencarian berikutnya
+                fetchHistoryFromServer(studentId, cacheKey, false, studentName);
+            } else {
+                // Jika belum pernah dicari, tampilkan loading dan ambil dari server
+                loader.style.display = 'flex';
+                loader.classList.remove('hidden');
+                await fetchHistoryFromServer(studentId, cacheKey, true, studentName);
+            }
+        }
+
+        async function fetchHistoryFromServer(studentId, cacheKey, showUI, studentName) {
+            const loader = document.getElementById('initial-loader');
             try {
                 const response = await fetch(APPS_SCRIPT_URL, {
                     method: 'POST',
@@ -136,26 +151,38 @@
                 });
                 
                 const data = await response.json();
-                loader.style.display = 'none';
-                loader.classList.add('hidden');
+                
+                if (showUI) {
+                    loader.style.display = 'none';
+                    loader.classList.add('hidden');
+                }
 
                 if (!data.success) {
-                    showError("Terjadi kesalahan: " + data.error);
+                    if (showUI) showError("Terjadi kesalahan: " + data.error);
                     return;
                 }
 
-                renderResults(data.data, studentId, foundStudent ? foundStudent.name : studentId);
+                // Simpan hasil terbaru ke dalam memori HP (Cache)
+                localStorage.setItem(cacheKey, JSON.stringify(data.data));
+
+                // Jika ini panggilan dengan UI, render hasilnya
+                if (showUI) {
+                    renderResults(data.data, studentId, studentName);
+                }
 
             } catch (err) {
-                loader.style.display = 'none';
-                loader.classList.add('hidden');
-                showError("Gagal terhubung ke server. Pastikan URL benar.");
+                if (showUI) {
+                    loader.style.display = 'none';
+                    loader.classList.add('hidden');
+                    showError("Gagal terhubung ke server. Pastikan URL benar.");
+                }
             }
         }
 
         function renderResults(results, studentId, studentName) {
             const resultsContainer = document.getElementById('results-container');
             resultsContainer.classList.remove('hidden');
+            resultsContainer.innerHTML = ''; // Bersihkan kontainer sebelum render
 
             if (results.length === 0) {
                 resultsContainer.innerHTML = `<div class="text-center p-8 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-gray-500">Tidak ada histori belanja untuk santri ini.</div>`;
@@ -203,12 +230,6 @@
                 `;
                 resultsContainer.appendChild(card);
             });
-        }
-
-        function showError(msg) {
-            const errEl = document.getElementById('error-message');
-            errEl.textContent = msg;
-            errEl.classList.remove('hidden');
         }
 
         // Eksekusi initApp saat layar siap
